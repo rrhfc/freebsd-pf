@@ -1,0 +1,137 @@
+---
+# tasks file for freebsd-pf
+
+- name: "Enable and start pf"
+  ansible.builtin.lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^pf_enable'
+    line: 'pf_enable="YES"'
+
+- name: "Increase pfctl request/table size limits"
+  ansible.builtin.lineinfile:
+    dest: /etc/sysctl.conf
+    regexp: '^net.pf.request_maxcount'
+    line: 'net.pf.request_maxcount=400000'
+
+- name: "Enable and start pflog"
+  ansible.builtin.lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^pflog_enable'
+    line: 'pflog_enable="YES"'
+
+- name: "Set pflog logfile"
+  ansible.builtin.lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^pflog_logfile'
+    line: 'pf_logfile="/var/log/pflog"'
+
+- name: "Set pf flags"
+  ansible.builtin.lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^pf_flags'
+    line: 'pf_flags=""'
+
+- name: "Set pflog flags"
+  ansible.builtin.lineinfile:
+    dest: /etc/rc.conf
+    regexp: '^pflog_flags'
+    line: 'pflog_flags=""'
+
+- name: "Add _pfbadhost group"
+  ansible.builtin.group:
+    name: _pfbadhost
+
+- name: "Add _pfbadhost user"
+  ansible.builtin.user:
+    name: _pfbadhost
+    group: _pfbadhost
+    password: '*************'
+    create_home: no
+    login_class: daemon
+
+- name: "Add doas command to _pfbadhost for updating pf config"
+  ansible.builtin.lineinfile:
+    line: permit nopass _pfbadhost cmd /sbin/pfctl args -t pfbadhost -T replace -f /etc/pf-badhost.txt
+    dest: /usr/local/etc/doas.conf
+    validate: doas -C %s
+
+- name: "Add doas command to _pfbadhost for updating pf config"
+  ansible.builtin.lineinfile:
+    line: permit nopass _pfbadhost cmd /sbin/pfctl args -nf /etc/pf.conf
+    dest: /usr/local/etc/doas.conf
+    validate: doas -C %s
+
+- name: "Add doas commands to _pfbadhost for updating badhost database"
+  ansible.builtin.lineinfile:
+    line: permit nopass _pfbadhost cmd pfctl args -nf /etc/pf.conf
+    dest: /usr/local/etc/doas.conf
+    validate: doas -C %s
+
+- name: "Copy pf-badhost binary to /usr/local/bin"
+  ansible.builtin.copy:
+    src: pf-badhost
+    dest: /usr/local/bin/pf-badhost
+    mode: 0755
+    owner: root
+    group: wheel 
+
+- name: "Ensure /etc/pf-badhost.txt is present with proper permissions"
+  ansible.builtin.file:
+    group: wheel
+    owner: _pfbadhost
+    mode: 0640
+    path: /etc/pf-badhost.txt
+    state: touch 
+
+- name: "Ensure /var/log/pf-badhost/ is present with proper permissions"
+  ansible.builtin.file:
+    group: wheel
+    owner: root 
+    mode: 0755
+    path: /var/log/pf-badhost/
+    state: directory 
+
+- name: "Ensure /var/log/pf-badhost/pf-badhost.log is present with proper permissions"
+  ansible.builtin.file:
+    group: wheel
+    owner: _pfbadhost
+    mode: 0640
+    path: /var/log/pf-badhost/pf-badhost.log
+    state: touch 
+
+
+- name: "Ensure /var/log/pf-badhost/pf-badhost.log.0.gz is present with proper permissions"
+  ansible.builtin.file:
+    group: wheel
+    owner: _pfbadhost
+    mode: 0640
+    path: /var/log/pf-badhost/pf-badhost.log.0.gz
+    state: touch 
+
+- name: "Install pf.conf"
+  ansible.builtin.copy:
+    group: wheel 
+    owner: root
+    mode: 0644
+    src: pf.conf
+    dest: /etc/pf.conf
+
+- name: "Setup cronjob for pf-badhost renewal"
+  ansible.builtin.cron:
+    name: "Update pf-badhost database"
+    special_time: daily
+    job: pf-badhost -O freebsd  
+    user: _pfbadhost
+
+- name: "Install packages for pf-badhost"
+  community.general.pkgng:
+    name: oksh aggregate py38-aggregate6 
+    state: present
+
+- name: "Symlink oksh and ksh binaries (for pf-badhost)"
+  ansible.builtin.file:
+    src: /usr/local/bin/oksh
+    dest: /usr/local/bin/ksh
+    owner: root
+    group: wheel 
+    state: link

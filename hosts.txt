@@ -1,0 +1,6 @@
+[freebsd]
+192.168.2.55
+192.168.2.56
+
+[freebsd:vars]
+ansible_user=typhoon

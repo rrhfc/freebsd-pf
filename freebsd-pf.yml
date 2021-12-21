@@ -1,0 +1,7 @@
+---
+- hosts: freebsd 
+  become: true
+  become_method: doas
+  gather_facts: true 
+  roles:
+     - ../freebsd-pf
