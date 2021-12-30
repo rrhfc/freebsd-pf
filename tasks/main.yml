@@ -119,10 +119,12 @@
     src: pf.conf
     dest: /etc/pf.conf
 
-- name: "Setup cronjob for pf-badhost renewal"
+- name: "Setup cronjob for pf-badhost renewal (will run every Sunday at 2 AM)"
   ansible.builtin.cron:
     name: "Update pf-badhost database"
-    special_time: weekly
+    weekday: "0"
+    hour: "2"
+    minute: "0"
     job: pf-badhost -O freebsd  
     user: _pfbadhost
 
